@@ -1,0 +1,259 @@
+package net.kira.corisednd.ui.characters
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CharacterFormScreen(
+    vm: CharacterFormViewModel,
+    isEdit: Boolean,
+    onBack: () -> Unit,
+    onSaved: () -> Unit,
+) {
+    val state by vm.state.collectAsState()
+    var showSpells by remember { mutableStateOf(false) }
+
+    LaunchedEffect(state.saved) { if (state.saved) onSaved() }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(if (isEdit) "Редактирование" else "Новый персонаж") },
+                navigationIcon = { TextButton(onClick = onBack) { Text("← Назад") } },
+            )
+        },
+    ) { padding ->
+        Box(Modifier.padding(padding).fillMaxSize()) {
+            when {
+                state.loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
+                state.loadError != null -> Column(
+                    Modifier.align(Alignment.Center).padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text(state.loadError ?: "")
+                    Spacer(Modifier.height(12.dp))
+                    Button(onClick = vm::load) { Text("Повторить") }
+                }
+                else -> Column(
+                    Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .imePadding()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    OutlinedTextField(
+                        value = state.name,
+                        onValueChange = vm::setName,
+                        label = { Text("Имя") },
+                        singleLine = true,
+                        isError = "name" in state.errors,
+                        supportingText = state.errors["name"]?.let { { Text(it) } },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+
+                    Picker(
+                        label = "Раса", items = state.races, selectedId = state.raceId,
+                        idOf = { it.id }, nameOf = { it.outName },
+                        optional = false, error = state.errors["race"], onSelect = vm::setRace,
+                    )
+                    Picker(
+                        label = "Культура", items = state.cultures, selectedId = state.cultureId,
+                        idOf = { it.id }, nameOf = { it.name },
+                        optional = true, onSelect = vm::setCulture,
+                    )
+                    Picker(
+                        label = "Религия", items = state.religions, selectedId = state.religionId,
+                        idOf = { it.id }, nameOf = { it.name },
+                        optional = true, onSelect = vm::setReligion,
+                    )
+                    Picker(
+                        label = "Предыстория", items = state.backstories, selectedId = state.backstoryId,
+                        idOf = { it.id }, nameOf = { it.name },
+                        optional = true, onSelect = vm::setBackstory,
+                    )
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        NumberField("Уровень", state.level, state.errors["level"], vm::setLevel, Modifier.weight(1f))
+                        NumberField("Опыт", state.exp, state.errors["exp"], vm::setExp, Modifier.weight(1f))
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        NumberField("Здоровье (HP)", state.hp, state.errors["hp"], vm::setHp, Modifier.weight(1f))
+                        NumberField("Мана (ML)", state.ml, state.errors["ml"], vm::setMl, Modifier.weight(1f))
+                    }
+
+                    if (!isEdit) {
+                        Text("Заклинания (необязательно)", style = MaterialTheme.typography.titleMedium)
+                        if (state.selectedSpells.isEmpty()) {
+                            Text("Не выбраны", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            state.selectedSpells.forEach { (id, name) ->
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("• $name", Modifier.weight(1f))
+                                    TextButton(onClick = { vm.removeSpell(id) }) { Text("Убрать") }
+                                }
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = { showSpells = true; vm.openSpells() },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("Выбрать заклинания") }
+                    }
+
+                    if (isEdit) {
+                        Text("Атрибуты", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Значения от 0 до 10, применяются сразу",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        if (state.statBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                        AttributeList(state.attributes, !state.statBusy, vm::setAttribute)
+
+                        Text("Навыки", style = MaterialTheme.typography.titleMedium)
+                        SkillGroups(state.attributes, state.skills, !state.statBusy, vm::setSkill)
+
+                        state.statError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    }
+
+                    state.saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+
+                    Button(
+                        onClick = vm::save,
+                        enabled = !state.saving,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        if (state.saving) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                        else Text("Сохранить")
+                    }
+                }
+            }
+        }
+    }
+
+    if (showSpells) {
+        AlertDialog(
+            onDismissRequest = { showSpells = false },
+            title = { Text("Заклинания") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = state.spellQuery,
+                        onValueChange = vm::onSpellQuery,
+                        label = { Text("Поиск") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    when {
+                        state.spellsLoading -> LinearProgressIndicator(Modifier.fillMaxWidth())
+                        state.spellsError != null -> Column {
+                            Text(state.spellsError ?: "", color = MaterialTheme.colorScheme.error)
+                            TextButton(onClick = vm::openSpells) { Text("Повторить") }
+                        }
+                        state.spellResults.isEmpty() -> Text("Ничего не найдено")
+                        else -> LazyColumn(Modifier.heightIn(max = 320.dp)) {
+                            items(state.spellResults, key = { it.id }) { spell ->
+                                Row(
+                                    Modifier.fillMaxWidth().clickable { vm.toggleSpell(spell) },
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Checkbox(
+                                        checked = spell.id in state.selectedSpells,
+                                        onCheckedChange = { vm.toggleSpell(spell) },
+                                    )
+                                    Column {
+                                        Text(spell.name)
+                                        spell.type?.let {
+                                            Text(it, style = MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Text(
+                        "Показаны первые 50, уточните поиск",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            },
+            confirmButton = { TextButton(onClick = { showSpells = false }) { Text("Готово") } },
+        )
+    }
+}
+
+@Composable
+private fun NumberField(
+    label: String,
+    value: String,
+    error: String?,
+    onChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        label = { Text(label) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        isError = error != null,
+        supportingText = error?.let { { Text(it) } },
+        modifier = modifier,
+    )
+}
+
+@Composable
+private fun <T> Picker(
+    label: String,
+    items: List<T>,
+    selectedId: Long?,
+    idOf: (T) -> Long,
+    nameOf: (T) -> String,
+    optional: Boolean,
+    error: String? = null,
+    onSelect: (Long?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val current = items.firstOrNull { idOf(it) == selectedId }?.let(nameOf)
+
+    Column {
+        Box {
+            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("$label: ${current ?: "не выбрано"}", modifier = Modifier.weight(1f))
+                Text("▾")
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                if (optional) {
+                    DropdownMenuItem(
+                        text = { Text("Не выбрано") },
+                        onClick = { onSelect(null); expanded = false },
+                    )
+                }
+                items.forEach { item ->
+                    DropdownMenuItem(
+                        text = { Text(nameOf(item)) },
+                        onClick = { onSelect(idOf(item)); expanded = false },
+                    )
+                }
+            }
+        }
+        if (error != null) {
+            Text(error, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}

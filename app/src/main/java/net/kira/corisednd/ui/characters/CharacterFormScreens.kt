@@ -1,9 +1,6 @@
 package net.kira.corisednd.ui.characters
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -14,23 +11,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
+/** Правка существующего персонажа. Создание идёт через мастер (CharacterWizardScreen). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CharacterFormScreen(
     vm: CharacterFormViewModel,
-    isEdit: Boolean,
     onBack: () -> Unit,
     onSaved: () -> Unit,
 ) {
     val state by vm.state.collectAsState()
-    var showSpells by remember { mutableStateOf(false) }
 
     LaunchedEffect(state.saved) { if (state.saved) onSaved() }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (isEdit) "Редактирование" else "Новый персонаж") },
+                title = { Text("Редактирование") },
                 navigationIcon = { TextButton(onClick = onBack) { Text("← Назад") } },
             )
         },
@@ -89,60 +85,33 @@ fun CharacterFormScreen(
                         NumberField("Уровень", state.level, state.errors["level"], vm::setLevel, Modifier.weight(1f))
                         NumberField("Опыт", state.exp, state.errors["exp"], vm::setExp, Modifier.weight(1f))
                     }
-                    if (isEdit) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            NumberField(
-                                "Здоровье (HP)", state.hp, state.errors["hp"], vm::setHp, Modifier.weight(1f),
-                                hint = state.hpMax?.let { "Максимум: $it" },
-                            )
-                            NumberField(
-                                "Нагрузка (ML)", state.ml, state.errors["ml"], vm::setMl, Modifier.weight(1f),
-                                hint = state.mlMax?.let { "Максимум: $it" },
-                            )
-                        }
-                    } else {
-                        Text(
-                            "Здоровье при создании равно максимальному, магическая нагрузка равна нулю. Максимумы рассчитываются автоматически",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        NumberField(
+                            "Здоровье (HP)", state.hp, state.errors["hp"], vm::setHp, Modifier.weight(1f),
+                            hint = state.hpMax?.let { "Максимум: $it" },
+                        )
+                        NumberField(
+                            "Нагрузка (ML)", state.ml, state.errors["ml"], vm::setMl, Modifier.weight(1f),
+                            hint = state.mlMax?.let { "Максимум: $it" },
                         )
                     }
 
-                    if (!isEdit) {
-                        Text("Заклинания (необязательно)", style = MaterialTheme.typography.titleMedium)
-                        if (state.selectedSpells.isEmpty()) {
-                            Text("Не выбраны", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        } else {
-                            state.selectedSpells.forEach { (id, name) ->
-                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                    Text("• $name", Modifier.weight(1f))
-                                    TextButton(onClick = { vm.removeSpell(id) }) { Text("Убрать") }
-                                }
-                            }
-                        }
-                        OutlinedButton(
-                            onClick = { showSpells = true; vm.openSpells() },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("Выбрать заклинания") }
-                    }
+                    Text("Атрибуты", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Значения от 0 до 10, применяются сразу",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (state.statBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    AttributeList(state.attributes, !state.statBusy, vm::setAttribute)
 
-                    if (isEdit) {
-                        Text("Атрибуты", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Значения от 0 до 10, применяются сразу",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        if (state.statBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
-                        AttributeList(state.attributes, !state.statBusy, vm::setAttribute)
+                    Text("Навыки", style = MaterialTheme.typography.titleMedium)
+                    SkillGroups(state.attributes, state.skills, !state.statBusy, vm::setSkill)
 
-                        Text("Навыки", style = MaterialTheme.typography.titleMedium)
-                        SkillGroups(state.attributes, state.skills, !state.statBusy, vm::setSkill)
+                    state.statError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
-                        state.statError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                        Text("Характер и биография", style = MaterialTheme.typography.titleMedium)
-                        PersonalityFields(state.personality, vm::setPersonality)
-                    }
+                    Text("Характер и биография", style = MaterialTheme.typography.titleMedium)
+                    PersonalityFields(state.personality, vm::setPersonality)
 
                     state.saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
@@ -157,59 +126,6 @@ fun CharacterFormScreen(
                 }
             }
         }
-    }
-
-    if (showSpells) {
-        AlertDialog(
-            onDismissRequest = { showSpells = false },
-            title = { Text("Заклинания") },
-            text = {
-                Column {
-                    OutlinedTextField(
-                        value = state.spellQuery,
-                        onValueChange = vm::onSpellQuery,
-                        label = { Text("Поиск") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    when {
-                        state.spellsLoading -> LinearProgressIndicator(Modifier.fillMaxWidth())
-                        state.spellsError != null -> Column {
-                            Text(state.spellsError ?: "", color = MaterialTheme.colorScheme.error)
-                            TextButton(onClick = vm::openSpells) { Text("Повторить") }
-                        }
-                        state.spellResults.isEmpty() -> Text("Ничего не найдено")
-                        else -> LazyColumn(Modifier.heightIn(max = 320.dp)) {
-                            items(state.spellResults, key = { it.id }) { spell ->
-                                Row(
-                                    Modifier.fillMaxWidth().clickable { vm.toggleSpell(spell) },
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Checkbox(
-                                        checked = spell.id in state.selectedSpells,
-                                        onCheckedChange = { vm.toggleSpell(spell) },
-                                    )
-                                    Column {
-                                        Text(spell.name)
-                                        spell.type?.let {
-                                            Text(it, style = MaterialTheme.typography.bodySmall)
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    Text(
-                        "Показаны первые 50, уточните поиск",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
-                }
-            },
-            confirmButton = { TextButton(onClick = { showSpells = false }) { Text("Готово") } },
-        )
     }
 }
 

@@ -2,15 +2,12 @@ package net.kira.corisednd.ui.characters
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.kira.corisednd.data.AppContainer
 import net.kira.corisednd.data.AttributeValue
-import net.kira.corisednd.data.CharacterCreateRequest
 import net.kira.corisednd.data.CharacterUpdateRequest
 import net.kira.corisednd.data.CharactersApi
 import net.kira.corisednd.data.NamedRef
@@ -18,7 +15,6 @@ import net.kira.corisednd.data.PersonalityDto
 import net.kira.corisednd.data.RaceItem
 import net.kira.corisednd.data.SetValueRequest
 import net.kira.corisednd.data.SkillValue
-import net.kira.corisednd.data.SpellItem
 import net.kira.corisednd.data.safeCall
 
 data class FormState(
@@ -45,11 +41,6 @@ data class FormState(
     val religions: List<NamedRef> = emptyList(),
     val backstories: List<NamedRef> = emptyList(),
 
-    val selectedSpells: Map<Long, String> = emptyMap(),
-    val spellQuery: String = "",
-    val spellResults: List<SpellItem> = emptyList(),
-    val spellsLoading: Boolean = false,
-    val spellsError: String? = null,
     val attributes: List<AttributeValue> = emptyList(),
     val skills: List<SkillValue> = emptyList(),
     val statBusy: Boolean = false,
@@ -59,18 +50,16 @@ data class FormState(
     val errors: Map<String, String> = emptyMap(),
 )
 
-/** characterId == null: создание, иначе правка существующего персонажа. */
+/** Правка существующего персонажа. Создание идёт через мастер (CharacterWizardViewModel). */
 class CharacterFormViewModel(
     container: AppContainer,
-    private val characterId: Long?,
+    private val characterId: Long,
 ) : ViewModel() {
 
     private val api: CharactersApi = container.retrofit.create(CharactersApi::class.java)
 
     private val _state = MutableStateFlow(FormState())
     val state: StateFlow<FormState> = _state
-
-    private var spellJob: Job? = null
 
     init { load() }
 
@@ -81,16 +70,16 @@ class CharacterFormViewModel(
             val cultures = safeCall { api.cultures() }
             val religions = safeCall { api.religions() }
             val backstories = safeCall { api.backstories() }
-            val detail = characterId?.let { safeCall { api.get(it) } }
+            val detail = safeCall { api.get(characterId) }
 
-            val failure = listOfNotNull(races, cultures, religions, backstories, detail)
+            val failure = listOf<Result<*>>(races, cultures, religions, backstories, detail)
                 .firstOrNull { it.isFailure }
             if (failure != null) {
                 _state.update { it.copy(loading = false, loadError = failure.exceptionOrNull()?.message) }
                 return@launch
             }
 
-            val c = detail?.getOrNull()
+            val c = detail.getOrThrow()
             _state.update { s ->
                 s.copy(
                     loading = false,
@@ -98,20 +87,20 @@ class CharacterFormViewModel(
                     cultures = cultures.getOrThrow(),
                     religions = religions.getOrThrow(),
                     backstories = backstories.getOrThrow(),
-                    name = c?.name ?: s.name,
-                    raceId = if (c != null) c.race?.id else s.raceId,
-                    cultureId = if (c != null) c.culture?.id else s.cultureId,
-                    religionId = if (c != null) c.religion?.id else s.religionId,
-                    backstoryId = if (c != null) c.backstory?.id else s.backstoryId,
-                    level = c?.level?.toString() ?: s.level,
-                    exp = c?.exp?.toString() ?: s.exp,
-                    hp = c?.hpCur?.toString() ?: s.hp,
-                    hpMax = c?.hpMax ?: s.hpMax,
-                    ml = c?.mlCur?.toString() ?: s.ml,
-                    mlMax = c?.mlMax ?: s.mlMax,
-                    personality = c?.personality ?: s.personality,
-                    attributes = c?.attributes ?: s.attributes,
-                    skills = c?.skills ?: s.skills,
+                    name = c.name,
+                    raceId = c.race?.id,
+                    cultureId = c.culture?.id,
+                    religionId = c.religion?.id,
+                    backstoryId = c.backstory?.id,
+                    level = c.level.toString(),
+                    exp = c.exp.toString(),
+                    hp = c.hpCur.toString(),
+                    hpMax = c.hpMax,
+                    ml = c.mlCur.toString(),
+                    mlMax = c.mlMax,
+                    personality = c.personality ?: s.personality,
+                    attributes = c.attributes,
+                    skills = c.skills,
                 )
             }
         }
@@ -130,65 +119,31 @@ class CharacterFormViewModel(
     fun setMl(v: String) = _state.update { it.copy(ml = digits(v), errors = it.errors - "ml") }
     fun setPersonality(p: PersonalityDto) = _state.update { it.copy(personality = p) }
 
-    // ---- заклинания (только при создании) ----
-
-    fun openSpells() {
-        spellJob?.cancel()
-        spellJob = viewModelScope.launch { fetchSpells() }
-    }
-
-    fun onSpellQuery(q: String) {
-        _state.update { it.copy(spellQuery = q) }
-        spellJob?.cancel()
-        spellJob = viewModelScope.launch {
-            delay(400)
-            fetchSpells()
-        }
-    }
-
-    private suspend fun fetchSpells() {
-        _state.update { it.copy(spellsLoading = true, spellsError = null) }
-        val q = _state.value.spellQuery.trim().ifEmpty { null }
-        safeCall { api.spells(search = q) }
-            .onSuccess { p -> _state.update { it.copy(spellsLoading = false, spellResults = p.items) } }
-            .onFailure { e -> _state.update { it.copy(spellsLoading = false, spellsError = e.message) } }
-    }
-
-    fun toggleSpell(spell: SpellItem) = _state.update {
-        val m = it.selectedSpells.toMutableMap()
-        if (m.remove(spell.id) == null) m[spell.id] = spell.name
-        it.copy(selectedSpells = m)
-    }
-
-    fun removeSpell(id: Long) = _state.update { it.copy(selectedSpells = it.selectedSpells - id) }
-
-    // ---- атрибуты и навыки (только при правке, применяются сразу) ----
+    // ---- атрибуты и навыки (применяются сразу) ----
 
     fun setAttribute(attributeId: Long, value: Int) {
-        val id = characterId ?: return
         if (_state.value.statBusy || value !in 0..10) return
         _state.update { it.copy(statBusy = true, statError = null) }
         viewModelScope.launch {
-            safeCall { api.setAttribute(id, attributeId, SetValueRequest(value)) }
-                .onSuccess { reloadStats(id) }
+            safeCall { api.setAttribute(characterId, attributeId, SetValueRequest(value)) }
+                .onSuccess { reloadStats() }
                 .onFailure { e -> _state.update { it.copy(statBusy = false, statError = e.message) } }
         }
     }
 
     fun setSkill(skillId: Long, level: Int) {
-        val id = characterId ?: return
         if (_state.value.statBusy || level !in 0..10) return
         _state.update { it.copy(statBusy = true, statError = null) }
         viewModelScope.launch {
-            safeCall { api.setSkill(id, skillId, SetValueRequest(level)) }
-                .onSuccess { reloadStats(id) }
+            safeCall { api.setSkill(characterId, skillId, SetValueRequest(level)) }
+                .onSuccess { reloadStats() }
                 .onFailure { e -> _state.update { it.copy(statBusy = false, statError = e.message) } }
         }
     }
 
     /** Обновляет только атрибуты и навыки: несохранённые правки в полях формы не затираются. */
-    private suspend fun reloadStats(id: Long) {
-        safeCall { api.get(id) }
+    private suspend fun reloadStats() {
+        safeCall { api.get(characterId) }
             .onSuccess { c ->
                 _state.update {
                     it.copy(
@@ -226,31 +181,17 @@ class CharacterFormViewModel(
 
         _state.update { it.copy(saving = true, saveError = null, errors = emptyMap()) }
         viewModelScope.launch {
-            val result = if (characterId == null) {
-                safeCall {
-                    api.create(
-                        CharacterCreateRequest(
-                            name = name, raceId = s.raceId!!,
-                            cultureId = s.cultureId, religionId = s.religionId, backstoryId = s.backstoryId,
-                            level = level!!, exp = exp!!, hpCur = hp!!, mlCur = ml!!,
-                            spellIds = s.selectedSpells.keys.toList(),
-                        )
+            safeCall {
+                api.update(
+                    characterId,
+                    CharacterUpdateRequest(
+                        name = name, raceId = s.raceId!!,
+                        cultureId = s.cultureId, religionId = s.religionId, backstoryId = s.backstoryId,
+                        level = level!!, exp = exp!!, hpCur = hp!!, mlCur = ml!!,
                     )
-                }
-            } else {
-                safeCall {
-                    api.update(
-                        characterId,
-                        CharacterUpdateRequest(
-                            name = name, raceId = s.raceId!!,
-                            cultureId = s.cultureId, religionId = s.religionId, backstoryId = s.backstoryId,
-                            level = level!!, exp = exp!!, hpCur = hp!!, mlCur = ml!!,
-                        )
-                    )
-                    api.setPersonality(characterId, s.personality)
-                }
+                )
+                api.setPersonality(characterId, s.personality)
             }
-            result
                 .onSuccess { _state.update { it.copy(saving = false, saved = true) } }
                 .onFailure { e -> _state.update { it.copy(saving = false, saveError = e.message) } }
         }

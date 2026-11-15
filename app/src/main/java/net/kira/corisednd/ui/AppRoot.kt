@@ -190,7 +190,6 @@ fun AppRoot(container: AppContainer) {
                     )
                     CharacterFormScreen(
                         vm,
-                        isEdit = true,
                         onBack = { nav.popBackStack() },
                         onSaved = { listVersion++; nav.popBackStack() },
                     )

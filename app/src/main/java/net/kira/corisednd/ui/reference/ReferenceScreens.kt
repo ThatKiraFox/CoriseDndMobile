@@ -14,6 +14,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,11 +47,14 @@ fun ReferenceHomeScreen(onBack: () -> Unit, onOpen: (Section) -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReferenceListScreen(vm: ReferenceListViewModel, onBack: () -> Unit, onOpen: (Long) -> Unit) {
+fun ReferenceListScreen(vm: ReferenceListViewModel, onBack: () -> Unit, onOpen: (Long) -> Unit, onCreate: (() -> Unit)?) {
     val section = vm.section
     val list = vm.visible
 
     Scaffold(
+        floatingActionButton = {
+            if (onCreate != null) FloatingActionButton(onClick = onCreate) { Text("+") }
+        },
         topBar = {
             TopAppBar(
                 title = { Text(section.title) },
@@ -127,6 +135,13 @@ private fun EntryCard(e: RefEntry, showSubtitle: Boolean, onClick: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Column(Modifier.padding(16.dp)) {
             Text(e.title, style = MaterialTheme.typography.titleMedium)
+            if (e.isCustom) {
+                Text(
+                    "Моё",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
             if (showSubtitle) {
                 e.subtitle?.let {
                     Text(
@@ -144,9 +159,16 @@ private fun EntryCard(e: RefEntry, showSubtitle: Boolean, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ReferenceDetailScreen(vm: ReferenceDetailViewModel, onBack: () -> Unit) {
+fun ReferenceDetailScreen(
+vm: ReferenceDetailViewModel,
+onBack: () -> Unit,
+onEdit: () -> Unit,
+onDeleted: () -> Unit,
+) {
     val section = vm.section
     val obj = vm.entry
+    var confirmDelete by remember { mutableStateOf(false) }
+    LaunchedEffect(vm.deleted) { if (vm.deleted) onDeleted() }
 
     Scaffold(
         topBar = {
@@ -159,6 +181,12 @@ fun ReferenceDetailScreen(vm: ReferenceDetailViewModel, onBack: () -> Unit) {
                     )
                 },
                 navigationIcon = { TextButton(onClick = onBack) { Text("← Назад") } },
+                actions = {
+                    if (vm.canEdit) {
+                        TextButton(onClick = onEdit, enabled = !vm.deleting) { Text("Изменить") }
+                        TextButton(onClick = { confirmDelete = true }, enabled = !vm.deleting) { Text("Удалить") }
+                    }
+                },
             )
         },
     ) { padding ->
@@ -179,6 +207,7 @@ fun ReferenceDetailScreen(vm: ReferenceDetailViewModel, onBack: () -> Unit) {
                     Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
+                    vm.actionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     section.fields.forEach { f ->
                         val value = obj.text(f.key) ?: return@forEach
                         Column {
@@ -195,5 +224,18 @@ fun ReferenceDetailScreen(vm: ReferenceDetailViewModel, onBack: () -> Unit) {
                 }
             }
         }
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Удалить запись?") },
+            text = { Text("Запись «${obj?.text(section.titleKey) ?: ""}» будет удалена.") },
+            confirmButton = {
+                TextButton(onClick = { confirmDelete = false; vm.delete() }) { Text("Удалить") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) { Text("Отмена") }
+            },
+        )
     }
 }

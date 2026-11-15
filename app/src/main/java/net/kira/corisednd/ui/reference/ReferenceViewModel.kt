@@ -79,6 +79,27 @@ class ReferenceDetailViewModel(
     var loading by mutableStateOf(true); private set
     var error by mutableStateOf<String?>(null); private set
 
+    var deleting by mutableStateOf(false); private set
+    var deleted by mutableStateOf(false); private set
+    var actionError by mutableStateOf<String?>(null); private set
+
+    /** Править и удалять можно только свою запись раздела, который поддерживает создание. */
+    val canEdit: Boolean
+        get() = section.editFields() != null &&
+                entry?.get("isCustom")?.jsonPrimitive?.booleanOrNull == true
+
+    fun delete() {
+        if (deleting) return
+        deleting = true
+        actionError = null
+        viewModelScope.launch {
+            safeCall { api.delete(section.path, id) }
+                .onSuccess { deleted = true }
+                .onFailure { actionError = it.message }
+            deleting = false
+        }
+    }
+
     init { load() }
 
     fun load() {

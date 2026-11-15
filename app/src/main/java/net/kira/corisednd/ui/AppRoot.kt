@@ -53,6 +53,7 @@ fun AppRoot(container: AppContainer) {
             // растут после изменений: новый ключ -> новая ViewModel -> данные грузятся заново
             var listVersion by remember { mutableIntStateOf(0) }
             var detailVersion by remember { mutableIntStateOf(0) }
+            var refVersion by remember { mutableIntStateOf(0) }
 
             NavHost(nav, startDestination = "characters") {
                 composable("characters") {
@@ -79,7 +80,6 @@ fun AppRoot(container: AppContainer) {
                         onSaved = { listVersion++; nav.popBackStack() },
                     )
                 }
-
                 composable("reference") {
                     ReferenceHomeScreen(
                         onBack = { nav.popBackStack() },
@@ -89,7 +89,7 @@ fun AppRoot(container: AppContainer) {
                 composable("reference/{section}") { entry ->
                     val section = Section.valueOf(entry.arguments!!.getString("section")!!)
                     val vm: ReferenceListViewModel = viewModel(
-                        key = "ref-list-${section.name}",
+                        key = "ref-list-${section.name}-$refVersion",
                         factory = viewModelFactory {
                             initializer { ReferenceListViewModel(container, section) }
                         },
@@ -98,6 +98,9 @@ fun AppRoot(container: AppContainer) {
                         vm,
                         onBack = { nav.popBackStack() },
                         onOpen = { id -> nav.navigate("reference/${section.name}/$id") },
+                        onCreate = if (section.editFields() != null) {
+                            { nav.navigate("reference-new/${section.name}") }
+                        } else null,
                     )
                 }
                 composable(
@@ -107,14 +110,50 @@ fun AppRoot(container: AppContainer) {
                     val section = Section.valueOf(entry.arguments!!.getString("section")!!)
                     val id = entry.arguments!!.getLong("id")
                     val vm: ReferenceDetailViewModel = viewModel(
-                        key = "ref-detail-${section.name}-$id",
+                        key = "ref-detail-${section.name}-$id-$refVersion",
                         factory = viewModelFactory {
                             initializer { ReferenceDetailViewModel(container, section, id) }
                         },
                     )
-                    ReferenceDetailScreen(vm, onBack = { nav.popBackStack() })
+                    ReferenceDetailScreen(
+                        vm,
+                        onBack = { nav.popBackStack() },
+                        onEdit = { nav.navigate("reference-edit/${section.name}/$id") },
+                        onDeleted = { refVersion++; nav.popBackStack() },
+                    )
                 }
-
+                composable("reference-new/{section}") { entry ->
+                    val section = Section.valueOf(entry.arguments!!.getString("section")!!)
+                    val vm: ContentFormViewModel = viewModel(
+                        key = "content-new-${section.name}",
+                        factory = viewModelFactory {
+                            initializer { ContentFormViewModel(container, section, null) }
+                        },
+                    )
+                    ContentFormScreen(
+                        vm,
+                        onBack = { nav.popBackStack() },
+                        onSaved = { refVersion++; nav.popBackStack() },
+                    )
+                }
+                composable(
+                    route = "reference-edit/{section}/{id}",
+                    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                ) { entry ->
+                    val section = Section.valueOf(entry.arguments!!.getString("section")!!)
+                    val id = entry.arguments!!.getLong("id")
+                    val vm: ContentFormViewModel = viewModel(
+                        key = "content-edit-${section.name}-$id",
+                        factory = viewModelFactory {
+                            initializer { ContentFormViewModel(container, section, id) }
+                        },
+                    )
+                    ContentFormScreen(
+                        vm,
+                        onBack = { nav.popBackStack() },
+                        onSaved = { refVersion++; nav.popBackStack() },
+                    )
+                }
                 composable(
                     route = "character/{id}",
                     arguments = listOf(navArgument("id") { type = NavType.LongType }),

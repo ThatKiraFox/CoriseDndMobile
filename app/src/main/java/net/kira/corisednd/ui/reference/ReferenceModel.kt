@@ -3,6 +3,7 @@ package net.kira.corisednd.ui.reference
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
 
@@ -91,7 +92,14 @@ enum class Section(
 }
 
 /** Строка списка: только то, что нужно для показа и перехода. */
-class RefEntry(val id: Long, val title: String, val subtitle: String?)
+class RefEntry(val id: Long, val title: String, val subtitle: String?, val isCustom: Boolean = false)
+
+fun JsonObject.toEntry(section: Section) = RefEntry(
+    id = getValue("id").jsonPrimitive.long,
+    title = text(section.titleKey) ?: "Без названия",
+    subtitle = section.subtitleKey?.let { text(it) },
+    isCustom = this["isCustom"]?.jsonPrimitive?.booleanOrNull == true,
+)
 
 /** Текст поля или null, если поля нет, оно null или пустое. */
 fun JsonObject.text(key: String): String? {
@@ -99,12 +107,6 @@ fun JsonObject.text(key: String): String? {
     if (p is JsonNull) return null
     return p.content.trim().ifEmpty { null }
 }
-
-fun JsonObject.toEntry(section: Section) = RefEntry(
-    id = getValue("id").jsonPrimitive.long,
-    title = text(section.titleKey) ?: "Без названия",
-    subtitle = section.subtitleKey?.let { text(it) },
-)
 
 fun displayValue(key: String, value: String): String =
     if (key == "grip") {

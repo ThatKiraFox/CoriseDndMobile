@@ -25,6 +25,9 @@ import net.kira.corisednd.ui.characters.CharacterFormScreen
 import net.kira.corisednd.ui.characters.CharacterFormViewModel
 import net.kira.corisednd.ui.characters.CharactersScreen
 import net.kira.corisednd.ui.characters.CharactersViewModel
+import net.kira.corisednd.ui.reference.*
+import net.kira.corisednd.ui.characters.CharacterWizardScreen
+import net.kira.corisednd.ui.characters.CharacterWizardViewModel
 
 private const val LOADING = "loading" // настоящий токен (JWT) таким быть не может
 
@@ -62,20 +65,56 @@ fun AppRoot(container: AppContainer) {
                         onOpen = { id -> nav.navigate("character/$id") },
                         onCreate = { nav.navigate("create") },
                         onLogout = { scope.launch { container.tokenStore.clear() } },
+                        onReference = { nav.navigate("reference") },
                     )
                 }
                 composable("create") {
-                    val vm: CharacterFormViewModel = viewModel(
-                        key = "form-create",
-                        factory = viewModelFactory { initializer { CharacterFormViewModel(container, null) } },
+                    val vm: CharacterWizardViewModel = viewModel(
+                        key = "wizard-create",
+                        factory = viewModelFactory { initializer { CharacterWizardViewModel(container) } },
                     )
-                    CharacterFormScreen(
+                    CharacterWizardScreen(
                         vm,
-                        isEdit = false,
                         onBack = { nav.popBackStack() },
                         onSaved = { listVersion++; nav.popBackStack() },
                     )
                 }
+
+                composable("reference") {
+                    ReferenceHomeScreen(
+                        onBack = { nav.popBackStack() },
+                        onOpen = { s -> nav.navigate("reference/${s.name}") },
+                    )
+                }
+                composable("reference/{section}") { entry ->
+                    val section = Section.valueOf(entry.arguments!!.getString("section")!!)
+                    val vm: ReferenceListViewModel = viewModel(
+                        key = "ref-list-${section.name}",
+                        factory = viewModelFactory {
+                            initializer { ReferenceListViewModel(container, section) }
+                        },
+                    )
+                    ReferenceListScreen(
+                        vm,
+                        onBack = { nav.popBackStack() },
+                        onOpen = { id -> nav.navigate("reference/${section.name}/$id") },
+                    )
+                }
+                composable(
+                    route = "reference/{section}/{id}",
+                    arguments = listOf(navArgument("id") { type = NavType.LongType }),
+                ) { entry ->
+                    val section = Section.valueOf(entry.arguments!!.getString("section")!!)
+                    val id = entry.arguments!!.getLong("id")
+                    val vm: ReferenceDetailViewModel = viewModel(
+                        key = "ref-detail-${section.name}-$id",
+                        factory = viewModelFactory {
+                            initializer { ReferenceDetailViewModel(container, section, id) }
+                        },
+                    )
+                    ReferenceDetailScreen(vm, onBack = { nav.popBackStack() })
+                }
+
                 composable(
                     route = "character/{id}",
                     arguments = listOf(navArgument("id") { type = NavType.LongType }),

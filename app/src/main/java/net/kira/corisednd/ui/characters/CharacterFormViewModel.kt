@@ -14,6 +14,7 @@ import net.kira.corisednd.data.CharacterCreateRequest
 import net.kira.corisednd.data.CharacterUpdateRequest
 import net.kira.corisednd.data.CharactersApi
 import net.kira.corisednd.data.NamedRef
+import net.kira.corisednd.data.PersonalityDto
 import net.kira.corisednd.data.RaceItem
 import net.kira.corisednd.data.SetValueRequest
 import net.kira.corisednd.data.SkillValue
@@ -35,7 +36,9 @@ data class FormState(
     val level: String = "1",
     val exp: String = "0",
     val hp: String = "0",
+    val hpMax: Int? = null,
     val ml: String = "0",
+    val mlMax: Int? = null,
 
     val races: List<RaceItem> = emptyList(),
     val cultures: List<NamedRef> = emptyList(),
@@ -51,6 +54,7 @@ data class FormState(
     val skills: List<SkillValue> = emptyList(),
     val statBusy: Boolean = false,
     val statError: String? = null,
+    val personality: PersonalityDto = PersonalityDto(),
 
     val errors: Map<String, String> = emptyMap(),
 )
@@ -102,7 +106,10 @@ class CharacterFormViewModel(
                     level = c?.level?.toString() ?: s.level,
                     exp = c?.exp?.toString() ?: s.exp,
                     hp = c?.hpCur?.toString() ?: s.hp,
+                    hpMax = c?.hpMax ?: s.hpMax,
                     ml = c?.mlCur?.toString() ?: s.ml,
+                    mlMax = c?.mlMax ?: s.mlMax,
+                    personality = c?.personality ?: s.personality,
                     attributes = c?.attributes ?: s.attributes,
                     skills = c?.skills ?: s.skills,
                 )
@@ -121,6 +128,7 @@ class CharacterFormViewModel(
     fun setExp(v: String) = _state.update { it.copy(exp = digits(v), errors = it.errors - "exp") }
     fun setHp(v: String) = _state.update { it.copy(hp = digits(v), errors = it.errors - "hp") }
     fun setMl(v: String) = _state.update { it.copy(ml = digits(v), errors = it.errors - "ml") }
+    fun setPersonality(p: PersonalityDto) = _state.update { it.copy(personality = p) }
 
     // ---- заклинания (только при создании) ----
 
@@ -182,7 +190,12 @@ class CharacterFormViewModel(
     private suspend fun reloadStats(id: Long) {
         safeCall { api.get(id) }
             .onSuccess { c ->
-                _state.update { it.copy(statBusy = false, attributes = c.attributes, skills = c.skills) }
+                _state.update {
+                    it.copy(
+                        statBusy = false, attributes = c.attributes, skills = c.skills,
+                        hpMax = c.hpMax, mlMax = c.mlMax,
+                    )
+                }
             }
             .onFailure { e -> _state.update { it.copy(statBusy = false, statError = e.message) } }
     }
@@ -234,6 +247,7 @@ class CharacterFormViewModel(
                             level = level!!, exp = exp!!, hpCur = hp!!, mlCur = ml!!,
                         )
                     )
+                    api.setPersonality(characterId, s.personality)
                 }
             }
             result

@@ -113,6 +113,18 @@ interface CharactersApi {
         @Path("skillId") skillId: Long,
         @Body body: SetValueRequest,
     )
+
+    @GET("attributes")
+    suspend fun attributes(): List<AttributeRef>
+
+    @GET("skills")
+    suspend fun skills(): List<SkillRef>
+
+    @GET("classes")
+    suspend fun classes(): List<NamedRef>
+
+    @PUT("characters/{id}/personality")
+    suspend fun setPersonality(@Path("id") id: Long, @Body body: PersonalityDto)
 }
 
 @Serializable
@@ -157,6 +169,11 @@ data class CharacterDetail(
     val inventory: List<InventoryEntry> = emptyList(),
     val attributes: List<AttributeValue> = emptyList(),
     val skills: List<SkillValue> = emptyList(),
+    val hpMax: Int? = null,
+    val mlMax: Int? = null,
+    val personality: PersonalityDto? = null,
+    val languages: List<NamedRef> = emptyList(),
+    val classes: List<NamedRef> = emptyList(),
 )
 
 @Serializable
@@ -171,6 +188,10 @@ data class CharacterCreateRequest(
     val hpCur: Int,
     val mlCur: Int,
     val spellIds: List<Long>,
+    val classId: Long? = null,
+    val personality: PersonalityDto = PersonalityDto(),
+    val attributes: List<StatInput> = emptyList(),
+    val skills: List<StatInput> = emptyList(),
 )
 
 @Serializable
@@ -239,3 +260,22 @@ data class SkillValue(
     val attributeId: Long,
     val level: Int = 0,
 )
+
+@Serializable
+data class AttributeRef(val id: Long, val name: String)
+
+@Serializable
+data class SkillRef(val id: Long, val name: String, val attributeId: Long)
+
+@Serializable
+data class PersonalityDto(
+    val biography: String = "",
+    val goal: String = "",
+    val uniqueTraits: String = "",
+    val personalityTraits: String = "",
+    val personalValues: String = "",
+    val personalEvils: String = "",
+)
+
+@Serializable
+data class StatInput(val id: Long, val value: Int)

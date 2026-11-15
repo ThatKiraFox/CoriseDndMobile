@@ -219,13 +219,20 @@ private fun DetailContent(
             Row2("Культура", c.culture?.name)
             Row2("Религия", c.religion?.name)
             Row2("Предыстория", c.backstory?.name)
+            Row2("Класс", c.classes.joinToString { it.name }.ifEmpty { null })
+            Row2("Языки", c.languages.joinToString { it.name }.ifEmpty { null })
         }
 
         Section("Параметры") {
             Row2("Уровень", c.level.toString())
             Row2("Опыт", c.exp.toString())
-            Row2("Здоровье (HP)", c.hpCur.toString())
-            Row2("Мана (ML)", c.mlCur.toString())
+            Row2("Здоровье (HP)", c.hpMax?.let { "${c.hpCur} / $it" } ?: c.hpCur.toString())
+            Row2("Магическая нагрузка (ML)", c.mlMax?.let { "${c.mlCur} / $it" } ?: c.mlCur.toString())
+        }
+
+        Section("Характер и биография") {
+            val p = c.personality
+            if (p == null) Text("Не заполнено") else PersonalityView(p)
         }
 
         Section("Атрибуты") {

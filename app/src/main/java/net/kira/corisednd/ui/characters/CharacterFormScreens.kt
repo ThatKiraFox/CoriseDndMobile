@@ -89,9 +89,23 @@ fun CharacterFormScreen(
                         NumberField("Уровень", state.level, state.errors["level"], vm::setLevel, Modifier.weight(1f))
                         NumberField("Опыт", state.exp, state.errors["exp"], vm::setExp, Modifier.weight(1f))
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        NumberField("Здоровье (HP)", state.hp, state.errors["hp"], vm::setHp, Modifier.weight(1f))
-                        NumberField("Мана (ML)", state.ml, state.errors["ml"], vm::setMl, Modifier.weight(1f))
+                    if (isEdit) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            NumberField(
+                                "Здоровье (HP)", state.hp, state.errors["hp"], vm::setHp, Modifier.weight(1f),
+                                hint = state.hpMax?.let { "Максимум: $it" },
+                            )
+                            NumberField(
+                                "Нагрузка (ML)", state.ml, state.errors["ml"], vm::setMl, Modifier.weight(1f),
+                                hint = state.mlMax?.let { "Максимум: $it" },
+                            )
+                        }
+                    } else {
+                        Text(
+                            "Здоровье при создании равно максимальному, магическая нагрузка равна нулю. Максимумы рассчитываются автоматически",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
 
                     if (!isEdit) {
@@ -126,6 +140,8 @@ fun CharacterFormScreen(
                         SkillGroups(state.attributes, state.skills, !state.statBusy, vm::setSkill)
 
                         state.statError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                        Text("Характер и биография", style = MaterialTheme.typography.titleMedium)
+                        PersonalityFields(state.personality, vm::setPersonality)
                     }
 
                     state.saveError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -204,7 +220,9 @@ private fun NumberField(
     error: String?,
     onChange: (String) -> Unit,
     modifier: Modifier = Modifier,
+    hint: String? = null,
 ) {
+    val supporting = error ?: hint
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
@@ -212,13 +230,13 @@ private fun NumberField(
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         isError = error != null,
-        supportingText = error?.let { { Text(it) } },
+        supportingText = supporting?.let { { Text(it) } },
         modifier = modifier,
     )
 }
 
 @Composable
-private fun <T> Picker(
+internal fun <T> Picker(
     label: String,
     items: List<T>,
     selectedId: Long?,

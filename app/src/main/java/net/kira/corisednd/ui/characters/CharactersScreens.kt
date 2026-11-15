@@ -36,7 +36,12 @@ private fun <T> Picker(
 }
 
 @Composable
-fun CharactersScreen(vm: CharactersViewModel, onLogout: () -> Unit, onOpen: (Long) -> Unit, onCreate: () -> Unit) {
+fun CharactersScreen(vm: CharactersViewModel,
+                     onLogout: () -> Unit,
+                     onOpen: (Long) -> Unit,
+                     onCreate: () -> Unit,
+                     onReference: () -> Unit,
+                     ) {
     val listState = rememberLazyListState()
     val nearEnd by remember {
         derivedStateOf {
@@ -62,7 +67,10 @@ fun CharactersScreen(vm: CharactersViewModel, onLogout: () -> Unit, onOpen: (Lon
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text("Персонажи", style = MaterialTheme.typography.headlineSmall)
-                TextButton(onClick = onLogout) { Text("Выйти") }
+                Row {
+                    TextButton(onClick = onReference) { Text("Справочник") }
+                    TextButton(onClick = onLogout) { Text("Выйти") }
+                }
             }
 
             OutlinedTextField(

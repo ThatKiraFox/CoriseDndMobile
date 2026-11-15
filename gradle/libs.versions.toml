@@ -15,6 +15,7 @@ datastore = "1.2.0"
 retrofit = "3.0.0"
 okhttpLogging = "4.12.0"
 serializationJson = "1.9.0"
+markdown = "0.39.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -43,6 +44,7 @@ retrofit-kotlinx-serialization = { group = "com.squareup.retrofit2", name = "con
 okhttp-logging = { group = "com.squareup.okhttp3", name = "logging-interceptor", version.ref = "okhttpLogging" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serializationJson" }
 androidx-compose-material-icons-core = { group = "androidx.compose.material", name = "material-icons-core" }
+markdown-renderer-m3 = { group = "com.mikepenz", name = "multiplatform-markdown-renderer-m3", version.ref = "markdown" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

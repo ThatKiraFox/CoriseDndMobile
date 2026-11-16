@@ -10,7 +10,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 // Эмулятор видит компьютер по 10.0.2.2. Для реального телефона поменять на IP компьютера.
-const val BASE_URL = "http://10.0.2.2:8080/api/v1/"
+const val BASE_URL = "http://localhost:8080/api/v1/"
 
 class AppContainer(context: Context) {
     val tokenStore = TokenStore(context)
